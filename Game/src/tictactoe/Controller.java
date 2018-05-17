@@ -7,7 +7,6 @@ import javax.jms.JMSConsumer;
 import javax.jms.JMSContext;
 import javax.jms.JMSException;
 import javax.jms.Queue;
-import javax.management.remote.JMXServiceURL;
 
 import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
@@ -32,12 +31,14 @@ public class Controller {
 	private int winner;
 	private boolean endGame = false;
 	private PTPProducer producer;
+	
+	private JMSContext jmsContext;
+	private JMSConsumer jmsConsumer;
 
 	public Controller() {
 		initButtons();
 		turn = new Boolean(true);
-
-		
+			
 		startWindow();
 		receiveQueueMessageAsynch();
 		producer = new PTPProducer();
@@ -93,7 +94,6 @@ public class Controller {
 		HBox hboxSecondRow = new HBox();
 		HBox hboxThirdRow = new HBox();
 
-		// userCharacterLabel = new Label("Twój znacznik to: " + getCharacter());
 		userCharacterLabel.setPadding(new Insets(5, 5, 5, 60));
 
 		if (winner == 0)
@@ -135,8 +135,8 @@ public class Controller {
 		else
 			return "";
 	}
-
-	private String getOpponentCharacter() {
+	
+	private String getOpponentsCharacter() {
 		if (character == 1)
 			return "X";
 		else if (character == 2)
@@ -144,7 +144,7 @@ public class Controller {
 		else
 			return "";
 	}
-
+	
 	public String infoLabelFill() {
 		if (turn.equals(true))
 			return "Twoja tura";
@@ -153,10 +153,11 @@ public class Controller {
 	}
 
 	private String userCharacterLabelFill() {
-		return "Twój znacznik to:" + getPlayerCharacter();
+		return "Twój znacznik to: " + getPlayerCharacter();
 	}
 
 	private void buttonChange(ActionEvent e) {
+
 		boolean win = false;
 		boolean loose = false;
 		int x = -1, y = -1;
@@ -174,8 +175,9 @@ public class Controller {
 				}
 			}
 		}
+		producer.sendQueueMessages(getPlayerCharacter(), x, y, 0, false);
 		if (win) {
-			winner = (turn.equals(true) ? 1 : 2);
+			winner = (character == 1 ? 1 : 2);
 			winInfo();
 		} else if (loose) {
 			endGame = true;
@@ -185,14 +187,12 @@ public class Controller {
 		if (winner == 0 && endGame == false)
 			infoLabel.setText(infoLabelFill());
 
-		//System.out.println(getPlayerCharacter());
-	//	System.out.println(x);
-		producer.sendQueueMessages(getPlayerCharacter(), x, y);
 
 		lockButtons();
-		turn = !turn;
-		infoLabel.setText(infoLabelFill());
-		// character = (character == 1 ? 2 : 1);
+		turn = new Boolean(!turn.booleanValue());
+		if (winner == 0 && endGame == false)
+			infoLabel.setText(infoLabelFill());
+
 	}
 
 	private boolean checkWin(int i, int j) {
@@ -237,22 +237,16 @@ public class Controller {
 	}
 
 	private void winInfo() {
-		lockButtons();
-		String w = (winner == 1 ? "O" : "X");
-		infoLabel.setText("WYGRAŁ " + w);
-		infoLabel.setPadding(new Insets(0, 0, 0, 90));
-		infoLabel.setTextFill(Color.RED);
-
+		producer.sendQueueMessages(getPlayerCharacter(), 0, 0, winner, false);
+		producer.sendQueueMessages(getOpponentsCharacter(), 0, 0, winner, false);
 	}
 
 	private void looseInfo() {
-		lockButtons();
-		infoLabel.setText("REMIS");
-		infoLabel.setPadding(new Insets(0, 0, 0, 100));
-		infoLabel.setTextFill(Color.BLUE);
+		producer.sendQueueMessages(getPlayerCharacter(), 0, 0, 0, true);
+		producer.sendQueueMessages(getOpponentsCharacter(), 0, 0, 0, true);
 	}
 
-	private void lockButtons() {
+	public void lockButtons() {
 		for (int i = 0; i < 3; ++i) {
 			for (int j = 0; j < 3; ++j) {
 				buttonTable[i][j].setDisable(true);
@@ -263,33 +257,34 @@ public class Controller {
 	public void unlockButtons() {
 		for (int i = 0; i < 3; ++i) {
 			for (int j = 0; j < 3; ++j) {
-				// System.out.println(buttonTable[i][j].getText());
-				if (!buttonTable[i][j].getText().equals(null))
+				if (buttonTable[i][j].getText().equals(""))
 					buttonTable[i][j].setDisable(false);
 			}
 		}
 	}
 
 	public void fillOpponentsMove(String sign, Integer x, Integer y) {
-		System.out.println(x.intValue() + " " + y.intValue());
 		buttonTable[x.intValue()][y.intValue()].setText(sign);
 		buttonTable[x.intValue()][y.intValue()].setFont(new Font(40));
+	}
+	
+	public void stageHiding() {
+		jmsConsumer.close();
+		jmsContext.close();
 	}
 
 	public void receiveQueueMessageAsynch() {
 
 		ConnectionFactory connectionFactory = new com.sun.messaging.ConnectionFactory();
-		JMSContext jmsContext = connectionFactory.createContext();
+		jmsContext = connectionFactory.createContext();
 		try {
 			((com.sun.messaging.ConnectionFactory) connectionFactory)
 					.setProperty(com.sun.messaging.ConnectionConfiguration.imqAddressList, "localhost:7676/jms");
 
 			Queue queue = new com.sun.messaging.Queue("ATJQueue");
-			JMSConsumer jmsConsumer = jmsContext.createConsumer(queue);
-
-			System.out.println(character);
+			
 			if (character == 1)
-				jmsConsumer = jmsContext.createConsumer(queue, "character = 'X'");
+				jmsConsumer = jmsContext.createConsumer(queue, "character = 'X' ");
 			else if (character == 2)
 				jmsConsumer = jmsContext.createConsumer(queue, "character = 'O'");
 

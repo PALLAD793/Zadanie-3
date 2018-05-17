@@ -15,6 +15,7 @@ public class Main extends Application {
 			primaryStage.setScene(scene);
 			primaryStage.setTitle("Kółko i krzyżyk");
 			primaryStage.setResizable(false);
+			primaryStage.setOnHiding(e -> controller.stageHiding());
 			primaryStage.show();
 		} catch (Exception e) {
 			e.printStackTrace();
